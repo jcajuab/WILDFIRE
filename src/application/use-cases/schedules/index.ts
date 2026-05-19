@@ -10,4 +10,5 @@ export {
 export { GetScheduleUseCase } from "./get-schedule.use-case";
 export { ListScheduleWindowUseCase } from "./list-schedule-window.use-case";
 export { ListSchedulesUseCase } from "./list-schedules.use-case";
+export { ReconcilePlaylistStatusesUseCase } from "./reconcile-playlist-statuses.use-case";
 export { UpdateScheduleUseCase } from "./update-schedule.use-case";

@@ -7,3 +7,4 @@ export { createDisplaysHttpModule } from "./displays";
 export { createPlaylistsHttpModule } from "./playlists";
 export { createRbacHttpModule } from "./rbac";
 export { createSchedulesHttpModule } from "./schedules";
+export { createSettingsHttpModule } from "./settings";

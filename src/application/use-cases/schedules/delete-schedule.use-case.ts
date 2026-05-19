@@ -6,6 +6,7 @@ import {
 import { type PlaylistRepository } from "#/application/ports/playlists";
 import { type ScheduleRepository } from "#/application/ports/schedules";
 import { NotFoundError } from "./errors";
+import { type ReconcilePlaylistStatusesUseCase } from "./reconcile-playlist-statuses.use-case";
 import { ensureScheduleVisibleToOwner } from "./shared";
 
 export class DeleteScheduleUseCase {
@@ -16,6 +17,10 @@ export class DeleteScheduleUseCase {
       contentRepository: ContentRepository;
       displayEventPublisher?: DisplayStreamEventPublisher;
       adminLifecycleEventPublisher?: AdminDisplayLifecycleEventPublisher;
+      reconcilePlaylistStatuses?: Pick<
+        ReconcilePlaylistStatusesUseCase,
+        "execute"
+      >;
     },
   ) {}
 
@@ -33,20 +38,26 @@ export class DeleteScheduleUseCase {
     if (!deleted) throw new NotFoundError("Schedule not found");
 
     if (existing.playlistId) {
-      const remaining = await this.deps.scheduleRepository.countByPlaylistId(
-        existing.playlistId,
-      );
-      if (remaining === 0) {
-        await this.deps.playlistRepository.updateStatus(
-          existing.playlistId,
-          "DRAFT",
-        );
-        this.deps.adminLifecycleEventPublisher?.publish({
-          type: "playlist_status_changed",
-          playlistId: existing.playlistId,
-          status: "DRAFT",
-          occurredAt: new Date().toISOString(),
+      if (this.deps.reconcilePlaylistStatuses) {
+        await this.deps.reconcilePlaylistStatuses.execute({
+          playlistIds: [existing.playlistId],
         });
+      } else {
+        const remaining = await this.deps.scheduleRepository.countByPlaylistId(
+          existing.playlistId,
+        );
+        if (remaining === 0) {
+          await this.deps.playlistRepository.updateStatus(
+            existing.playlistId,
+            "DRAFT",
+          );
+          this.deps.adminLifecycleEventPublisher?.publish({
+            type: "playlist_status_changed",
+            playlistId: existing.playlistId,
+            status: "DRAFT",
+            occurredAt: new Date().toISOString(),
+          });
+        }
       }
     }
     this.deps.displayEventPublisher?.publish({

@@ -16,8 +16,10 @@ import {
   createPlaylistsHttpModule,
   createRbacHttpModule,
   createSchedulesHttpModule,
+  createSettingsHttpModule,
 } from "#/bootstrap/http/modules";
 import { startDisplayStatusReconciler } from "#/bootstrap/http/runtime/display-status-reconciler";
+import { startMaintenanceCleanupWorker } from "#/bootstrap/http/runtime/maintenance-cleanup-worker";
 import { env } from "#/env";
 import {
   publishContentJobEvent,
@@ -68,6 +70,7 @@ import { createHealthRouter } from "#/interfaces/http/routes/health.route";
 import { createPlaylistsRouter } from "#/interfaces/http/routes/playlists";
 import { createRbacRouter } from "#/interfaces/http/routes/rbac";
 import { createSchedulesRouter } from "#/interfaces/http/routes/schedules";
+import { createSettingsRouter } from "#/interfaces/http/routes/settings";
 import { RedisAuthSecurityStore } from "#/interfaces/http/security/redis-auth-security.store";
 import { runStartupAuthIdentitySync } from "#/interfaces/http/startup/auth-identity.sync";
 import { startHtshadowFileWatcher } from "#/interfaces/http/startup/htshadow-sync.service";
@@ -180,6 +183,7 @@ export const syncAuthIdentityOnStartup = () =>
   });
 
 let stopDisplayStatusReconciler: (() => Promise<void>) | null = null;
+let stopMaintenanceCleanupWorker: (() => Promise<void>) | null = null;
 let stopHtshadowFileWatcher: (() => void) | null = null;
 const getStorageConfig = () => ({
   minioEndpoint: container.storage.minioEndpoint,
@@ -224,8 +228,24 @@ const startHtshadowFileWatcherWorker = (): void => {
   });
 };
 
+const startMaintenanceWorker = (): void => {
+  if (stopMaintenanceCleanupWorker != null) {
+    return;
+  }
+  stopMaintenanceCleanupWorker = startMaintenanceCleanupWorker({
+    maintenanceSettingsRepository:
+      container.repositories.maintenanceSettingsRepository,
+    playlistRepository: container.repositories.playlistRepository,
+    scheduleRepository: container.repositories.scheduleRepository,
+    auditLogRepository: container.repositories.auditLogRepository,
+    displayEventPublisher,
+    timezone: env.SCHEDULE_TIMEZONE,
+  });
+};
+
 export const startHttpBackgroundWorkers = (): void => {
   startDisplayStatusReconcilerWorker();
+  startMaintenanceWorker();
   startHtshadowFileWatcherWorker();
 };
 
@@ -441,6 +461,7 @@ const playlistsModule = createPlaylistsHttpModule({
   storage: container.storage.contentStorage,
   thumbnailUrlExpiresInSeconds: contentThumbnailUrlExpiresInSeconds,
   displayEventPublisher,
+  timezone: env.SCHEDULE_TIMEZONE,
 });
 const playlistsRouter = createPlaylistsRouter(playlistsModule);
 
@@ -605,6 +626,18 @@ const auditModule = createAuditHttpModule({
 });
 const auditRouter = createAuditRouter(auditModule);
 
+const settingsModule = createSettingsHttpModule({
+  jwtSecret: env.JWT_SECRET,
+  authSessionRepository: container.repositories.authSessionRepository,
+  authSessionCookieName: env.AUTH_SESSION_COOKIE_NAME,
+  repositories: {
+    maintenanceSettingsRepository:
+      container.repositories.maintenanceSettingsRepository,
+    authorizationRepository: container.repositories.authorizationRepository,
+  },
+});
+const settingsRouter = createSettingsRouter(settingsModule);
+
 const auditQueue = new RedisAuditQueue({
   enabled: env.AUDIT_QUEUE_ENABLED,
   maxStreamLength: env.AUDIT_QUEUE_CAPACITY,
@@ -700,6 +733,7 @@ app.route("/v1/content", contentRouter);
 app.route("/v1/content-jobs", contentJobsRouter);
 app.route("/v1/audit", auditRouter);
 app.route("/v1/ai", aiRouter);
+app.route("/v1/settings", settingsRouter);
 app.route("/v1", rbacRouter);
 
 app.onError((err, c) => {
@@ -768,6 +802,10 @@ export const stopHttpBackgroundWorkers = async (): Promise<void> => {
   if (stopDisplayStatusReconciler) {
     await stopDisplayStatusReconciler();
     stopDisplayStatusReconciler = null;
+  }
+  if (stopMaintenanceCleanupWorker) {
+    await stopMaintenanceCleanupWorker();
+    stopMaintenanceCleanupWorker = null;
   }
   if (stopHtshadowFileWatcher) {
     stopHtshadowFileWatcher();

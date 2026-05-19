@@ -9,6 +9,7 @@ import {
   type PlaylistRepository,
 } from "#/application/ports/playlists";
 import { type UserRepository } from "#/application/ports/rbac";
+import { type ReconcilePlaylistStatusesUseCase } from "#/application/use-cases/schedules";
 import { type PlaylistStatus } from "#/domain/playlists/playlist";
 import { toPlaylistItemView, toPlaylistView } from "./playlist-view";
 import { listPlaylistPageForOwner } from "./shared";
@@ -21,6 +22,10 @@ export class ListPlaylistsUseCase {
       userRepository: UserRepository;
       contentStorage?: ContentStorage;
       thumbnailUrlExpiresInSeconds?: number;
+      reconcilePlaylistStatuses?: Pick<
+        ReconcilePlaylistStatusesUseCase,
+        "execute"
+      >;
     },
   ) {}
 
@@ -73,6 +78,8 @@ export class ListPlaylistsUseCase {
       100,
     );
     const offset = (page - 1) * pageSize;
+
+    await this.deps.reconcilePlaylistStatuses?.execute();
 
     const { items: playlists, total } = await listPlaylistPageForOwner(
       this.deps.playlistRepository,

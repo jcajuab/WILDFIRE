@@ -6,6 +6,7 @@ import {
 import { type ScheduleKind } from "#/application/ports/schedules";
 import { computeRequiredMinPlaylistDurationSeconds } from "#/application/use-cases/shared/playlist-required-duration";
 import { NotFoundError } from "./errors";
+import { type ReconcilePlaylistStatusesUseCase } from "./reconcile-playlist-statuses.use-case";
 import { toScheduleView } from "./schedule-view";
 import {
   computeWindowDurationSeconds,
@@ -25,6 +26,10 @@ export class CreateScheduleUseCase {
     private readonly deps: ScheduleMutationDeps & {
       displayEventPublisher?: DisplayStreamEventPublisher;
       adminLifecycleEventPublisher?: AdminDisplayLifecycleEventPublisher;
+      reconcilePlaylistStatuses?: Pick<
+        ReconcilePlaylistStatusesUseCase,
+        "execute"
+      >;
     },
   ) {}
 
@@ -141,13 +146,20 @@ export class CreateScheduleUseCase {
     });
 
     if (playlist) {
-      await this.deps.playlistRepository.updateStatus(playlist.id, "IN_USE");
-      this.deps.adminLifecycleEventPublisher?.publish({
-        type: "playlist_status_changed",
-        playlistId: playlist.id,
-        status: "IN_USE",
-        occurredAt: new Date().toISOString(),
-      });
+      if (this.deps.reconcilePlaylistStatuses) {
+        await this.deps.reconcilePlaylistStatuses.execute({
+          playlistIds: [playlist.id],
+          now: input.now,
+        });
+      } else {
+        await this.deps.playlistRepository.updateStatus(playlist.id, "IN_USE");
+        this.deps.adminLifecycleEventPublisher?.publish({
+          type: "playlist_status_changed",
+          playlistId: playlist.id,
+          status: "IN_USE",
+          occurredAt: new Date().toISOString(),
+        });
+      }
     }
     this.deps.displayEventPublisher?.publish({
       type: "schedule_updated",

@@ -23,6 +23,10 @@ export interface ScheduleRepository {
   listByDisplay(displayId: string): Promise<ScheduleRecord[]>;
   listByDisplayIds?(displayIds: string[]): Promise<ScheduleRecord[]>;
   listByPlaylistId(playlistId: string): Promise<ScheduleRecord[]>;
+  listUnfinishedByPlaylistId?(
+    playlistId: string,
+    input: { date: string; time: string },
+  ): Promise<ScheduleRecord[]>;
   listByCreator?(userId: string): Promise<ScheduleRecord[]>;
   listWindow?(input: {
     from: string;
@@ -59,5 +63,14 @@ export interface ScheduleRepository {
   ): Promise<ScheduleRecord | null>;
   delete(id: string): Promise<boolean>;
   countByPlaylistId(playlistId: string): Promise<number>;
+  countUnfinishedByPlaylistId?(
+    playlistId: string,
+    input: { date: string; time: string },
+  ): Promise<number>;
+  deleteFinishedBefore?(input: { date: string; time: string }): Promise<{
+    deleted: number;
+    playlistIds: string[];
+    displayIds: string[];
+  }>;
   countByContentId?(contentId: string): Promise<number>;
 }

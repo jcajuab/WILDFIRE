@@ -6,6 +6,7 @@ import {
 import { type ScheduleKind } from "#/application/ports/schedules";
 import { computeRequiredMinPlaylistDurationSeconds } from "#/application/use-cases/shared/playlist-required-duration";
 import { NotFoundError } from "./errors";
+import { type ReconcilePlaylistStatusesUseCase } from "./reconcile-playlist-statuses.use-case";
 import { toScheduleView } from "./schedule-view";
 import {
   computeWindowDurationSeconds,
@@ -24,6 +25,10 @@ export class UpdateScheduleUseCase {
     private readonly deps: ScheduleMutationDeps & {
       displayEventPublisher?: DisplayStreamEventPublisher;
       adminLifecycleEventPublisher?: AdminDisplayLifecycleEventPublisher;
+      reconcilePlaylistStatuses?: Pick<
+        ReconcilePlaylistStatusesUseCase,
+        "execute"
+      >;
     },
   ) {}
 
@@ -164,34 +169,54 @@ export class UpdateScheduleUseCase {
       throw new NotFoundError("Schedule not found");
     }
 
-    if (existing.playlistId && existing.playlistId !== schedule.playlistId) {
-      const remaining = await this.deps.scheduleRepository.countByPlaylistId(
-        existing.playlistId,
-      );
-      if (remaining === 0) {
-        await this.deps.playlistRepository.updateStatus(
-          existing.playlistId,
-          "DRAFT",
-        );
-        this.deps.adminLifecycleEventPublisher?.publish({
-          type: "playlist_status_changed",
-          playlistId: existing.playlistId,
-          status: "DRAFT",
-          occurredAt: new Date().toISOString(),
+    const affectedPlaylistIds = Array.from(
+      new Set(
+        [existing.playlistId, schedule.playlistId].filter(
+          (value): value is string => value != null,
+        ),
+      ),
+    );
+    if (affectedPlaylistIds.length > 0) {
+      if (this.deps.reconcilePlaylistStatuses) {
+        await this.deps.reconcilePlaylistStatuses.execute({
+          playlistIds: affectedPlaylistIds,
+          now: input.now,
         });
+      } else {
+        if (
+          existing.playlistId &&
+          existing.playlistId !== schedule.playlistId
+        ) {
+          const remaining =
+            await this.deps.scheduleRepository.countByPlaylistId(
+              existing.playlistId,
+            );
+          if (remaining === 0) {
+            await this.deps.playlistRepository.updateStatus(
+              existing.playlistId,
+              "DRAFT",
+            );
+            this.deps.adminLifecycleEventPublisher?.publish({
+              type: "playlist_status_changed",
+              playlistId: existing.playlistId,
+              status: "DRAFT",
+              occurredAt: new Date().toISOString(),
+            });
+          }
+        }
+        if (schedule.playlistId) {
+          await this.deps.playlistRepository.updateStatus(
+            schedule.playlistId,
+            "IN_USE",
+          );
+          this.deps.adminLifecycleEventPublisher?.publish({
+            type: "playlist_status_changed",
+            playlistId: schedule.playlistId,
+            status: "IN_USE",
+            occurredAt: new Date().toISOString(),
+          });
+        }
       }
-    }
-    if (schedule.playlistId) {
-      await this.deps.playlistRepository.updateStatus(
-        schedule.playlistId,
-        "IN_USE",
-      );
-      this.deps.adminLifecycleEventPublisher?.publish({
-        type: "playlist_status_changed",
-        playlistId: schedule.playlistId,
-        status: "IN_USE",
-        occurredAt: new Date().toISOString(),
-      });
     }
     this.deps.displayEventPublisher?.publish({
       type: "schedule_updated",

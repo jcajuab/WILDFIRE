@@ -247,7 +247,7 @@ export const getValidatedWindow = (input: {
   return { startDate, endDate };
 };
 
-const formatDateTimeInTimezone = (date: Date, timezone: string) => {
+export const formatDateTimeInTimezone = (date: Date, timezone: string) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
@@ -264,6 +264,38 @@ const formatDateTimeInTimezone = (date: Date, timezone: string) => {
     date: `${part("year")}-${part("month")}-${part("day")}`,
     time: `${part("hour")}:${part("minute")}`,
   };
+};
+
+export const getScheduleDateTimeMinusDays = (input: {
+  now?: Date;
+  timezone?: string;
+  days: number;
+}) => {
+  const now = input.now ?? new Date();
+  const shifted = new Date(now.getTime() - input.days * DAY_SECONDS * 1000);
+  return formatDateTimeInTimezone(
+    shifted,
+    input.timezone ?? DEFAULT_SCHEDULE_TIMEZONE,
+  );
+};
+
+export const getCurrentScheduleDateTime = (input?: {
+  now?: Date;
+  timezone?: string;
+}) =>
+  formatDateTimeInTimezone(
+    input?.now ?? new Date(),
+    input?.timezone ?? DEFAULT_SCHEDULE_TIMEZONE,
+  );
+
+export const isScheduleFinished = (
+  schedule: Pick<ScheduleRecord, "endDate" | "endTime">,
+  current: { date: string; time: string },
+) => {
+  const endDate = schedule.endDate ?? "2099-12-31";
+  if (endDate < current.date) return true;
+  if (endDate > current.date) return false;
+  return schedule.endTime < current.time;
 };
 
 export const ensureScheduleStartIsNotInPast = (input: {

@@ -13,6 +13,7 @@ import {
   UpdatePlaylistUseCase,
 } from "#/application/use-cases/playlists";
 import { CheckPermissionUseCase } from "#/application/use-cases/rbac";
+import { ReconcilePlaylistStatusesUseCase } from "#/application/use-cases/schedules";
 import {
   type PlaylistsRouterDeps,
   type PlaylistsRouterUseCases,
@@ -42,6 +43,11 @@ export const createPlaylistsHttpModule = (
       contentStorage: routerDeps.storage,
       thumbnailUrlExpiresInSeconds: routerDeps.thumbnailUrlExpiresInSeconds,
     });
+  const reconcilePlaylistStatuses = new ReconcilePlaylistStatusesUseCase({
+    playlistRepository: routerDeps.repositories.playlistRepository,
+    scheduleRepository: routerDeps.repositories.scheduleRepository,
+    timezone: routerDeps.timezone,
+  });
 
   return {
     deps: routerDeps,
@@ -52,9 +58,11 @@ export const createPlaylistsHttpModule = (
         userRepository: routerDeps.repositories.userRepository,
         contentStorage: routerDeps.storage,
         thumbnailUrlExpiresInSeconds: routerDeps.thumbnailUrlExpiresInSeconds,
+        reconcilePlaylistStatuses,
       }),
       listPlaylistOptions: new ListPlaylistOptionsUseCase({
         playlistRepository: routerDeps.repositories.playlistRepository,
+        reconcilePlaylistStatuses,
       }),
       createPlaylist: new CreatePlaylistUseCase({
         playlistRepository: routerDeps.repositories.playlistRepository,
@@ -79,6 +87,8 @@ export const createPlaylistsHttpModule = (
         contentRepository: routerDeps.repositories.contentRepository,
         scheduleRepository: routerDeps.repositories.scheduleRepository,
         displayRepository: routerDeps.repositories.displayRepository,
+        displayEventPublisher: routerDeps.displayEventPublisher,
+        timezone: routerDeps.timezone,
       }),
       estimatePlaylistDuration: new EstimatePlaylistDurationUseCase({
         contentRepository: routerDeps.repositories.contentRepository,

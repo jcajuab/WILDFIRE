@@ -12,6 +12,7 @@ import {
   GetScheduleUseCase,
   ListSchedulesUseCase,
   ListScheduleWindowUseCase,
+  ReconcilePlaylistStatusesUseCase,
   UpdateScheduleUseCase,
 } from "#/application/use-cases/schedules";
 import {
@@ -33,6 +34,13 @@ export const createSchedulesHttpModule = (
       authorizationRepository: deps.repositories.authorizationRepository,
     }),
   };
+
+  const reconcilePlaylistStatuses = new ReconcilePlaylistStatusesUseCase({
+    playlistRepository: routerDeps.repositories.playlistRepository,
+    scheduleRepository: routerDeps.repositories.scheduleRepository,
+    adminLifecycleEventPublisher: routerDeps.adminLifecycleEventPublisher,
+    timezone: routerDeps.timezone,
+  });
 
   return {
     deps: routerDeps,
@@ -60,6 +68,7 @@ export const createSchedulesHttpModule = (
         displayEventPublisher: routerDeps.displayEventPublisher,
         adminLifecycleEventPublisher: routerDeps.adminLifecycleEventPublisher,
         timezone: routerDeps.timezone,
+        reconcilePlaylistStatuses,
       }),
       getSchedule: new GetScheduleUseCase({
         scheduleRepository: routerDeps.repositories.scheduleRepository,
@@ -77,6 +86,7 @@ export const createSchedulesHttpModule = (
         displayEventPublisher: routerDeps.displayEventPublisher,
         adminLifecycleEventPublisher: routerDeps.adminLifecycleEventPublisher,
         timezone: routerDeps.timezone,
+        reconcilePlaylistStatuses,
       }),
       deleteSchedule: new DeleteScheduleUseCase({
         scheduleRepository: routerDeps.repositories.scheduleRepository,
@@ -84,6 +94,7 @@ export const createSchedulesHttpModule = (
         contentRepository: routerDeps.repositories.contentRepository,
         displayEventPublisher: routerDeps.displayEventPublisher,
         adminLifecycleEventPublisher: routerDeps.adminLifecycleEventPublisher,
+        reconcilePlaylistStatuses,
       }),
       getMergedPlaylist: new GetMergedPlaylistUseCase({
         scheduleRepository: routerDeps.repositories.scheduleRepository,

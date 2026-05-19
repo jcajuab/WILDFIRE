@@ -92,6 +92,20 @@
       "when": 1779100000005,
       "tag": "0012_backfill_banned_users",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1779100000006,
+      "tag": "0013_maintenance_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1779211608485,
+      "tag": "0014_round_captain_flint",
+      "breakpoints": true
     }
   ]
 }

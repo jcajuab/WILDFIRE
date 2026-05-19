@@ -29,6 +29,7 @@ import {
   type DisplayRepository,
 } from "#/application/ports/displays";
 import { type EmergencySlotRepository } from "#/application/ports/emergency-slots";
+import { type MaintenanceSettingsRepository } from "#/application/ports/maintenance-settings";
 import {
   type PdfCropRenderer,
   type PdfCropSessionStore,
@@ -65,6 +66,7 @@ import { DisplayPairingSessionRedisRepository } from "#/infrastructure/db/reposi
 import { DisplayPreviewRedisRepository } from "#/infrastructure/db/repositories/display-preview.repo";
 import { EmergencySlotDbRepository } from "#/infrastructure/db/repositories/emergency-slot.repo";
 import { InvitationDbRepository } from "#/infrastructure/db/repositories/invitation.repo";
+import { MaintenanceSettingsDbRepository } from "#/infrastructure/db/repositories/maintenance-settings.repo";
 import { DbCredentialsRepository } from "#/infrastructure/db/repositories/password-hashes.repo";
 import { PermissionDbRepository } from "#/infrastructure/db/repositories/permission.repo";
 import { PlaylistDbRepository } from "#/infrastructure/db/repositories/playlist.repo";
@@ -131,6 +133,8 @@ export interface HttpContainer {
     emergencySlotRepository: EmergencySlotRepository;
     // Audit
     auditLogRepository: AuditLogRepository;
+    // Settings
+    maintenanceSettingsRepository: MaintenanceSettingsRepository;
   };
   auth: {
     /** Read-only htshadow credential lookup; Wildfire must not write to htshadow. */
@@ -196,6 +200,7 @@ export const createHttpContainer = (
 
   // Audit
   const auditLogRepository = new AuditLogDbRepository();
+  const maintenanceSettingsRepository = new MaintenanceSettingsDbRepository();
 
   const authIdentityCache = new RedisAuthIdentityCache();
 
@@ -252,6 +257,7 @@ export const createHttpContainer = (
       runtimeControlRepository,
       emergencySlotRepository,
       auditLogRepository,
+      maintenanceSettingsRepository,
     },
     auth: {
       credentialsRepository,

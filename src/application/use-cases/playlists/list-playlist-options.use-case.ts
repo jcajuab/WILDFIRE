@@ -1,4 +1,5 @@
 import { type PlaylistRepository } from "#/application/ports/playlists";
+import { type ReconcilePlaylistStatusesUseCase } from "#/application/use-cases/schedules";
 import { type PlaylistStatus } from "#/domain/playlists/playlist";
 import { listPlaylistsForOwner } from "./shared";
 
@@ -6,6 +7,10 @@ export class ListPlaylistOptionsUseCase {
   constructor(
     private readonly deps: {
       playlistRepository: PlaylistRepository;
+      reconcilePlaylistStatuses?: Pick<
+        ReconcilePlaylistStatusesUseCase,
+        "execute"
+      >;
     },
   ) {}
 
@@ -14,6 +19,8 @@ export class ListPlaylistOptionsUseCase {
     q?: string;
     status?: PlaylistStatus;
   }) {
+    await this.deps.reconcilePlaylistStatuses?.execute();
+
     const normalizedQuery = input?.q?.trim().toLowerCase();
     const playlists = input?.ownerId
       ? await listPlaylistsForOwner(this.deps.playlistRepository, input.ownerId)

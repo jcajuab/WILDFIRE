@@ -83,6 +83,12 @@ const buildScheduleQuery = () =>
       eq(scheduleContentTargets.scheduleId, schedules.id),
     );
 
+const finishedBeforeCondition = (input: { date: string; time: string }) =>
+  sql`(${schedules.endDate} < ${input.date} OR (${schedules.endDate} = ${input.date} AND ${schedules.endTime} < ${input.time}))`;
+
+const unfinishedAtOrAfterCondition = (input: { date: string; time: string }) =>
+  sql`(${schedules.endDate} > ${input.date} OR (${schedules.endDate} = ${input.date} AND ${schedules.endTime} >= ${input.time}))`;
+
 const assertValidTarget = (input: {
   kind: ScheduleKind;
   playlistId: string | null;
@@ -127,6 +133,19 @@ export class ScheduleDbRepository implements ScheduleRepository {
   async listByPlaylistId(playlistId: string): Promise<ScheduleRecord[]> {
     const rows = await buildScheduleQuery().where(
       eq(schedulePlaylistTargets.playlistId, playlistId),
+    );
+    return rows.map(mapScheduleRowToRecord);
+  }
+
+  async listUnfinishedByPlaylistId(
+    playlistId: string,
+    input: { date: string; time: string },
+  ): Promise<ScheduleRecord[]> {
+    const rows = await buildScheduleQuery().where(
+      and(
+        eq(schedulePlaylistTargets.playlistId, playlistId),
+        unfinishedAtOrAfterCondition(input),
+      ),
     );
     return rows.map(mapScheduleRowToRecord);
   }
@@ -330,6 +349,68 @@ export class ScheduleDbRepository implements ScheduleRepository {
       .from(schedulePlaylistTargets)
       .where(eq(schedulePlaylistTargets.playlistId, playlistId));
     return result[0]?.value ?? 0;
+  }
+
+  async countUnfinishedByPlaylistId(
+    playlistId: string,
+    input: { date: string; time: string },
+  ): Promise<number> {
+    const result = await db
+      .select({ value: sql<number>`count(*)` })
+      .from(schedulePlaylistTargets)
+      .innerJoin(
+        schedules,
+        eq(schedules.id, schedulePlaylistTargets.scheduleId),
+      )
+      .where(
+        and(
+          eq(schedulePlaylistTargets.playlistId, playlistId),
+          unfinishedAtOrAfterCondition(input),
+        ),
+      );
+    return result[0]?.value ?? 0;
+  }
+
+  async deleteFinishedBefore(input: { date: string; time: string }): Promise<{
+    deleted: number;
+    playlistIds: string[];
+    displayIds: string[];
+  }> {
+    const targets = await db
+      .select({
+        id: schedules.id,
+        displayId: schedules.displayId,
+        playlistId: schedulePlaylistTargets.playlistId,
+      })
+      .from(schedules)
+      .leftJoin(
+        schedulePlaylistTargets,
+        eq(schedulePlaylistTargets.scheduleId, schedules.id),
+      )
+      .where(finishedBeforeCondition(input));
+
+    if (targets.length === 0) {
+      return { deleted: 0, playlistIds: [], displayIds: [] };
+    }
+
+    const scheduleIds = targets.map((target) => target.id);
+    const result = await db
+      .delete(schedules)
+      .where(inArray(schedules.id, scheduleIds));
+
+    return {
+      deleted: Number(result[0]?.affectedRows ?? 0),
+      playlistIds: Array.from(
+        new Set(
+          targets
+            .map((target) => target.playlistId)
+            .filter((value): value is string => value != null),
+        ),
+      ),
+      displayIds: Array.from(
+        new Set(targets.map((target) => target.displayId)),
+      ),
+    };
   }
 
   async countByContentId(contentId: string): Promise<number> {
