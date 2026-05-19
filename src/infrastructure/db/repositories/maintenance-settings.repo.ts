@@ -13,6 +13,14 @@ const mapRow = (
   row: typeof maintenanceSettings.$inferSelect,
 ): MaintenanceSettingsRecord => ({
   id: row.id,
+  autoDeleteUnusedContentEnabled: Boolean(row.autoDeleteUnusedContentEnabled),
+  autoDeleteUnusedContentRetentionDays:
+    row.autoDeleteUnusedContentRetentionDays,
+  autoDeleteUnusedPlaylistsEnabled: Boolean(
+    row.autoDeleteUnusedPlaylistsEnabled,
+  ),
+  autoDeleteUnusedPlaylistsRetentionDays:
+    row.autoDeleteUnusedPlaylistsRetentionDays,
   autoDeleteFinishedSchedulesEnabled: Boolean(
     row.autoDeleteFinishedSchedulesEnabled,
   ),
@@ -43,6 +51,10 @@ export class MaintenanceSettingsDbRepository
     const now = new Date();
     await db.insert(maintenanceSettings).values({
       id: MAINTENANCE_SETTINGS_ID,
+      autoDeleteUnusedContentEnabled: true,
+      autoDeleteUnusedContentRetentionDays: 30,
+      autoDeleteUnusedPlaylistsEnabled: true,
+      autoDeleteUnusedPlaylistsRetentionDays: 30,
       autoDeleteFinishedSchedulesEnabled: true,
       autoDeleteFinishedSchedulesRetentionDays: 1,
       autoDeleteAuditLogsEnabled: true,
@@ -53,6 +65,10 @@ export class MaintenanceSettingsDbRepository
 
     return {
       id: MAINTENANCE_SETTINGS_ID,
+      autoDeleteUnusedContentEnabled: true,
+      autoDeleteUnusedContentRetentionDays: 30,
+      autoDeleteUnusedPlaylistsEnabled: true,
+      autoDeleteUnusedPlaylistsRetentionDays: 30,
       autoDeleteFinishedSchedulesEnabled: true,
       autoDeleteFinishedSchedulesRetentionDays: 1,
       autoDeleteAuditLogsEnabled: true,

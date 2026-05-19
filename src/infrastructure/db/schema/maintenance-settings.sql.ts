@@ -8,6 +8,24 @@ import {
 
 export const maintenanceSettings = mysqlTable("maintenance_settings", {
   id: varchar("id", { length: 36 }).primaryKey(),
+  autoDeleteUnusedContentEnabled: boolean("auto_delete_unused_content_enabled")
+    .notNull()
+    .default(true),
+  autoDeleteUnusedContentRetentionDays: int(
+    "auto_delete_unused_content_retention_days",
+  )
+    .notNull()
+    .default(30),
+  autoDeleteUnusedPlaylistsEnabled: boolean(
+    "auto_delete_unused_playlists_enabled",
+  )
+    .notNull()
+    .default(true),
+  autoDeleteUnusedPlaylistsRetentionDays: int(
+    "auto_delete_unused_playlists_retention_days",
+  )
+    .notNull()
+    .default(30),
   autoDeleteFinishedSchedulesEnabled: boolean(
     "auto_delete_finished_schedules_enabled",
   )

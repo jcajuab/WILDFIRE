@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { ValidationError } from "#/application/errors/validation";
 import {
   type PlaylistItemAtomicWriteInput,
@@ -12,8 +23,15 @@ import {
   type PlaylistStatus,
 } from "#/domain/playlists/playlist";
 import { db } from "#/infrastructure/db/client";
+import { content } from "#/infrastructure/db/schema/content.sql";
+import { emergencySlots } from "#/infrastructure/db/schema/emergency-slots.sql";
 import { playlists } from "#/infrastructure/db/schema/playlist.sql";
 import { playlistItems } from "#/infrastructure/db/schema/playlist-item.sql";
+import {
+  scheduleContentTargets,
+  schedulePlaylistTargets,
+  schedules,
+} from "#/infrastructure/db/schema/schedule.sql";
 import { buildLikeContainsPattern } from "#/infrastructure/db/utils/sql";
 
 const mapPlaylistRowToRecord = (
@@ -38,6 +56,12 @@ const mapPlaylistRowToRecord = (
       row.updatedAt instanceof Date
         ? row.updatedAt.toISOString()
         : row.updatedAt,
+    unusedSince:
+      row.unusedSince == null
+        ? null
+        : row.unusedSince instanceof Date
+          ? row.unusedSince.toISOString()
+          : row.unusedSince,
   };
 };
 
@@ -54,6 +78,42 @@ const mapPlaylistItemRowToRecord = (
 
 const PLAYLIST_SEQUENCE_UNIQUE_INDEX =
   "playlist_items_playlist_id_sequence_unique";
+
+const unfinishedScheduleCondition = (input: { date: string; time: string }) =>
+  sql`(${schedules.endDate} > ${input.date} OR (${schedules.endDate} = ${input.date} AND ${schedules.endTime} >= ${input.time}))`;
+
+const contentReferenceExists = (contentIdColumn = content.id) =>
+  sql`exists (select 1 from ${playlistItems} where ${playlistItems.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${scheduleContentTargets} where ${scheduleContentTargets.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${emergencySlots} where ${emergencySlots.contentId} = ${contentIdColumn})`;
+
+const markContentUsed = async (ids: readonly string[], at: Date) => {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+  await db
+    .update(content)
+    .set({ unusedSince: null, updatedAt: at })
+    .where(inArray(content.id, uniqueIds));
+};
+
+const refreshContentUnusedSince = async (ids: readonly string[], at: Date) => {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+  await db
+    .update(content)
+    .set({ unusedSince: null })
+    .where(and(inArray(content.id, uniqueIds), contentReferenceExists()));
+  await db
+    .update(content)
+    .set({ unusedSince: at })
+    .where(
+      and(
+        inArray(content.id, uniqueIds),
+        isNull(content.unusedSince),
+        sql`not (${contentReferenceExists()})`,
+      ),
+    );
+};
 
 export const mapPlaylistItemInsertError = (error: unknown): Error => {
   if (!(error instanceof Error)) {
@@ -245,6 +305,7 @@ export class PlaylistDbRepository implements PlaylistRepository {
       ownerId: input.ownerId,
       createdAt: now,
       updatedAt: now,
+      unusedSince: now,
     });
 
     return {
@@ -316,6 +377,7 @@ export class PlaylistDbRepository implements PlaylistRepository {
         description: next.description,
         showCounter: next.showCounter,
         updatedAt: now,
+        unusedSince: existing.status === "DRAFT" ? now : null,
       })
       .where(
         ownerId
@@ -331,7 +393,16 @@ export class PlaylistDbRepository implements PlaylistRepository {
   }
 
   async updateStatus(id: string, status: PlaylistStatus): Promise<void> {
-    await db.update(playlists).set({ status }).where(eq(playlists.id, id));
+    await db
+      .update(playlists)
+      .set({
+        status,
+        unusedSince:
+          status === "IN_USE"
+            ? null
+            : sql`coalesce(${playlists.unusedSince}, now())`,
+      })
+      .where(eq(playlists.id, id));
   }
 
   async delete(id: string): Promise<boolean> {
@@ -351,6 +422,64 @@ export class PlaylistDbRepository implements PlaylistRepository {
           : eq(playlists.id, id),
       );
     return (result[0]?.affectedRows ?? 0) > 0;
+  }
+
+  async deleteUnusedBefore(input: {
+    cutoff: Date;
+    current: { date: string; time: string };
+  }): Promise<{ deleted: number; contentIds: string[] }> {
+    const candidates = await db
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(
+        and(
+          isNotNull(playlists.unusedSince),
+          lte(playlists.unusedSince, input.cutoff),
+          sql`not exists (
+            select 1 from ${schedulePlaylistTargets}
+            inner join ${schedules} on ${schedules.id} = ${schedulePlaylistTargets.scheduleId}
+            where ${schedulePlaylistTargets.playlistId} = ${playlists.id}
+            and ${unfinishedScheduleCondition(input.current)}
+          )`,
+        ),
+      )
+      .limit(500);
+    const playlistIds = candidates.map((candidate) => candidate.id);
+    if (playlistIds.length === 0) return { deleted: 0, contentIds: [] };
+
+    const itemRows = await db
+      .select({ contentId: playlistItems.contentId })
+      .from(playlistItems)
+      .where(inArray(playlistItems.playlistId, playlistIds));
+    const contentIds = Array.from(
+      new Set(itemRows.map((row) => row.contentId)),
+    );
+
+    const result = await db.transaction(async (tx) => {
+      const finishedSchedules = await tx
+        .select({ id: schedules.id })
+        .from(schedules)
+        .innerJoin(
+          schedulePlaylistTargets,
+          eq(schedulePlaylistTargets.scheduleId, schedules.id),
+        )
+        .where(
+          and(
+            inArray(schedulePlaylistTargets.playlistId, playlistIds),
+            sql`not (${unfinishedScheduleCondition(input.current)})`,
+          ),
+        );
+      const scheduleIds = finishedSchedules.map((row) => row.id);
+      if (scheduleIds.length > 0) {
+        await tx.delete(schedules).where(inArray(schedules.id, scheduleIds));
+      }
+      return tx.delete(playlists).where(inArray(playlists.id, playlistIds));
+    });
+
+    return {
+      deleted: Number(result[0]?.affectedRows ?? 0),
+      contentIds,
+    };
   }
 
   async listItems(playlistId: string): Promise<PlaylistItemRecord[]> {
@@ -442,6 +571,7 @@ export class PlaylistDbRepository implements PlaylistRepository {
     } catch (error) {
       throw mapPlaylistItemInsertError(error);
     }
+    await markContentUsed([input.contentId], new Date());
 
     return {
       id,
@@ -542,6 +672,18 @@ export class PlaylistDbRepository implements PlaylistRepository {
         .map((item) => item.itemId),
     );
 
+    const deletedContentIds = existing
+      .filter((item) => !existingIdsToKeep.has(item.id))
+      .map((item) => item.contentId);
+    const newContentIds = input.items
+      .filter(
+        (
+          item,
+        ): item is Extract<PlaylistItemAtomicWriteInput, { kind: "new" }> =>
+          item.kind === "new",
+      )
+      .map((item) => item.contentId);
+
     try {
       await db.transaction(async (tx) => {
         const idsToDelete = existing
@@ -636,13 +778,22 @@ export class PlaylistDbRepository implements PlaylistRepository {
       throw mapPlaylistItemInsertError(error);
     }
 
+    const now = new Date();
+    await markContentUsed(newContentIds, now);
+    await refreshContentUnusedSince(deletedContentIds, now);
+
     return this.listItems(input.playlistId);
   }
 
   async deleteItem(id: string): Promise<boolean> {
+    const existing = await this.findItemById(id);
     const result = await db
       .delete(playlistItems)
       .where(eq(playlistItems.id, id));
-    return (result[0]?.affectedRows ?? 0) > 0;
+    const deleted = (result[0]?.affectedRows ?? 0) > 0;
+    if (deleted && existing) {
+      await refreshContentUnusedSince([existing.contentId], new Date());
+    }
+    return deleted;
   }
 }

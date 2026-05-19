@@ -1,5 +1,9 @@
 export interface MaintenanceSettingsRecord {
   id: string;
+  autoDeleteUnusedContentEnabled: boolean;
+  autoDeleteUnusedContentRetentionDays: number;
+  autoDeleteUnusedPlaylistsEnabled: boolean;
+  autoDeleteUnusedPlaylistsRetentionDays: number;
   autoDeleteFinishedSchedulesEnabled: boolean;
   autoDeleteFinishedSchedulesRetentionDays: number;
   autoDeleteAuditLogsEnabled: boolean;
@@ -9,6 +13,10 @@ export interface MaintenanceSettingsRecord {
 }
 
 export interface MaintenanceSettingsUpdate {
+  autoDeleteUnusedContentEnabled?: boolean;
+  autoDeleteUnusedContentRetentionDays?: number;
+  autoDeleteUnusedPlaylistsEnabled?: boolean;
+  autoDeleteUnusedPlaylistsRetentionDays?: number;
   autoDeleteFinishedSchedulesEnabled?: boolean;
   autoDeleteFinishedSchedulesRetentionDays?: number;
   autoDeleteAuditLogsEnabled?: boolean;

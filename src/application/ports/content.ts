@@ -22,6 +22,13 @@ export interface ContentRecord {
   ownerId: string;
   createdAt: string;
   updatedAt?: string;
+  unusedSince?: string | null;
+}
+
+export interface DeletedContentRecord {
+  id: string;
+  fileKey: string;
+  thumbnailKey?: string | null;
 }
 
 export interface ExtractedContentMetadata {
@@ -110,6 +117,9 @@ export interface ContentRepository {
   ): Promise<ContentRecord | null>;
   delete(id: string): Promise<boolean>;
   deleteForOwner(id: string, ownerId: string): Promise<boolean>;
+  markUsed?(ids: readonly string[], at: Date): Promise<void>;
+  refreshUnusedSince?(ids: readonly string[], at: Date): Promise<void>;
+  deleteUnusedBefore?(cutoff: Date): Promise<DeletedContentRecord[]>;
 }
 
 export interface ContentStorage {

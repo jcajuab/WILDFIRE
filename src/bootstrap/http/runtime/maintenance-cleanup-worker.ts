@@ -1,4 +1,8 @@
 import { type AuditLogRepository } from "#/application/ports/audit";
+import {
+  type ContentRepository,
+  type ContentStorage,
+} from "#/application/ports/content";
 import { type DisplayStreamEventPublisher } from "#/application/ports/display-stream-events";
 import { type MaintenanceSettingsRepository } from "#/application/ports/maintenance-settings";
 import { type PlaylistRepository } from "#/application/ports/playlists";
@@ -14,6 +18,8 @@ const DEFAULT_PLAYLIST_RECONCILE_INTERVAL_MS = 60 * 1000;
 
 export const startMaintenanceCleanupWorker = (input: {
   maintenanceSettingsRepository: MaintenanceSettingsRepository;
+  contentRepository: ContentRepository;
+  contentStorage: ContentStorage;
   playlistRepository: PlaylistRepository;
   scheduleRepository: ScheduleRepository;
   auditLogRepository: AuditLogRepository;
@@ -32,6 +38,9 @@ export const startMaintenanceCleanupWorker = (input: {
   });
   const cleanup = new RunMaintenanceCleanupUseCase({
     maintenanceSettingsRepository: input.maintenanceSettingsRepository,
+    contentRepository: input.contentRepository,
+    contentStorage: input.contentStorage,
+    playlistRepository: input.playlistRepository,
     scheduleRepository: input.scheduleRepository,
     auditLogRepository: input.auditLogRepository,
     reconcilePlaylistStatuses,
@@ -44,12 +53,19 @@ export const startMaintenanceCleanupWorker = (input: {
     const execution = (async () => {
       try {
         const result = await cleanup.execute();
-        if (result.deletedSchedules > 0 || result.deletedAuditLogs > 0) {
-          await invalidateServerCache(["schedules", "playlists"]);
+        if (
+          result.deletedUnusedContent > 0 ||
+          result.deletedUnusedPlaylists > 0 ||
+          result.deletedSchedules > 0 ||
+          result.deletedAuditLogs > 0
+        ) {
+          await invalidateServerCache(["content", "schedules", "playlists"]);
           logger.info(
             {
               component: "maintenance",
               event: "maintenance.cleanup.completed",
+              deletedUnusedContent: result.deletedUnusedContent,
+              deletedUnusedPlaylists: result.deletedUnusedPlaylists,
               deletedSchedules: result.deletedSchedules,
               deletedAuditLogs: result.deletedAuditLogs,
             },

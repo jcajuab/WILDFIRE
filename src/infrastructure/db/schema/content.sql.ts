@@ -24,6 +24,7 @@ export const content = mysqlTable(
       .references(() => users.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    unusedSince: timestamp("unused_since"),
   },
   (table) => ({
     statusIdx: index("content_status_idx").on(table.status),
@@ -35,6 +36,7 @@ export const content = mysqlTable(
       table.type,
       table.createdAt,
     ),
+    unusedSinceIdx: index("content_unused_since_idx").on(table.unusedSince),
   }),
 );
 

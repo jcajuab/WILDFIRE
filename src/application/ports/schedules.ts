@@ -70,6 +70,7 @@ export interface ScheduleRepository {
   deleteFinishedBefore?(input: { date: string; time: string }): Promise<{
     deleted: number;
     playlistIds: string[];
+    contentIds: string[];
     displayIds: string[];
   }>;
   countByContentId?(contentId: string): Promise<number>;

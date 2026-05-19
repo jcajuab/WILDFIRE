@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { ValidationError } from "#/application/errors/validation";
 import {
   type ScheduleKind,
@@ -6,6 +16,9 @@ import {
   type ScheduleRepository,
 } from "#/application/ports/schedules";
 import { db } from "#/infrastructure/db/client";
+import { content } from "#/infrastructure/db/schema/content.sql";
+import { emergencySlots } from "#/infrastructure/db/schema/emergency-slots.sql";
+import { playlistItems } from "#/infrastructure/db/schema/playlist-item.sql";
 import {
   scheduleContentTargets,
   schedulePlaylistTargets,
@@ -104,6 +117,39 @@ const assertValidTarget = (input: {
   if (input.contentId == null || input.playlistId != null) {
     throw new ValidationError("Flash schedules require contentId only");
   }
+};
+
+const contentReferenceExists = (contentIdColumn = content.id) =>
+  sql`exists (select 1 from ${playlistItems} where ${playlistItems.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${scheduleContentTargets} where ${scheduleContentTargets.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${emergencySlots} where ${emergencySlots.contentId} = ${contentIdColumn})`;
+
+const markContentUsed = async (ids: readonly string[], at: Date) => {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+  await db
+    .update(content)
+    .set({ unusedSince: null, updatedAt: at })
+    .where(inArray(content.id, uniqueIds));
+};
+
+const refreshContentUnusedSince = async (ids: readonly string[], at: Date) => {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+  await db
+    .update(content)
+    .set({ unusedSince: null })
+    .where(and(inArray(content.id, uniqueIds), contentReferenceExists()));
+  await db
+    .update(content)
+    .set({ unusedSince: at })
+    .where(
+      and(
+        inArray(content.id, uniqueIds),
+        isNull(content.unusedSince),
+        sql`not (${contentReferenceExists()})`,
+      ),
+    );
 };
 
 export class ScheduleDbRepository implements ScheduleRepository {
@@ -256,6 +302,9 @@ export class ScheduleDbRepository implements ScheduleRepository {
     if (!created) {
       throw new Error("Failed to load created schedule");
     }
+    if (created.contentId) {
+      await markContentUsed([created.contentId], now);
+    }
     return created;
   }
 
@@ -335,12 +384,25 @@ export class ScheduleDbRepository implements ScheduleRepository {
       }
     });
 
-    return this.findById(id);
+    const updated = await this.findById(id);
+    const nowForUsage = new Date();
+    if (updated?.contentId) {
+      await markContentUsed([updated.contentId], nowForUsage);
+    }
+    if (existing.contentId && existing.contentId !== updated?.contentId) {
+      await refreshContentUnusedSince([existing.contentId], nowForUsage);
+    }
+    return updated;
   }
 
   async delete(id: string): Promise<boolean> {
+    const existing = await this.findById(id);
     const result = await db.delete(schedules).where(eq(schedules.id, id));
-    return (result[0]?.affectedRows ?? 0) > 0;
+    const deleted = (result[0]?.affectedRows ?? 0) > 0;
+    if (deleted && existing?.contentId) {
+      await refreshContentUnusedSince([existing.contentId], new Date());
+    }
+    return deleted;
   }
 
   async countByPlaylistId(playlistId: string): Promise<number> {
@@ -374,6 +436,7 @@ export class ScheduleDbRepository implements ScheduleRepository {
   async deleteFinishedBefore(input: { date: string; time: string }): Promise<{
     deleted: number;
     playlistIds: string[];
+    contentIds: string[];
     displayIds: string[];
   }> {
     const targets = await db
@@ -381,22 +444,36 @@ export class ScheduleDbRepository implements ScheduleRepository {
         id: schedules.id,
         displayId: schedules.displayId,
         playlistId: schedulePlaylistTargets.playlistId,
+        contentId: scheduleContentTargets.contentId,
       })
       .from(schedules)
       .leftJoin(
         schedulePlaylistTargets,
         eq(schedulePlaylistTargets.scheduleId, schedules.id),
       )
+      .leftJoin(
+        scheduleContentTargets,
+        eq(scheduleContentTargets.scheduleId, schedules.id),
+      )
       .where(finishedBeforeCondition(input));
 
     if (targets.length === 0) {
-      return { deleted: 0, playlistIds: [], displayIds: [] };
+      return { deleted: 0, playlistIds: [], contentIds: [], displayIds: [] };
     }
 
     const scheduleIds = targets.map((target) => target.id);
     const result = await db
       .delete(schedules)
       .where(inArray(schedules.id, scheduleIds));
+
+    const contentIds = Array.from(
+      new Set(
+        targets
+          .map((target) => target.contentId)
+          .filter((value): value is string => value != null),
+      ),
+    );
+    await refreshContentUnusedSince(contentIds, new Date());
 
     return {
       deleted: Number(result[0]?.affectedRows ?? 0),
@@ -407,6 +484,7 @@ export class ScheduleDbRepository implements ScheduleRepository {
             .filter((value): value is string => value != null),
         ),
       ),
+      contentIds,
       displayIds: Array.from(
         new Set(targets.map((target) => target.displayId)),
       ),

@@ -1,7 +1,20 @@
-import { and, asc, desc, eq, inArray, like, ne, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import {
   type ContentRecord,
   type ContentRepository,
+  type DeletedContentRecord,
 } from "#/application/ports/content";
 import { parseContentStatus, parseContentType } from "#/domain/content/content";
 import { db } from "#/infrastructure/db/client";
@@ -11,7 +24,9 @@ import {
   contentFlashMessages,
   contentTextContent,
 } from "#/infrastructure/db/schema/content.sql";
+import { emergencySlots } from "#/infrastructure/db/schema/emergency-slots.sql";
 import { playlistItems } from "#/infrastructure/db/schema/playlist-item.sql";
+import { scheduleContentTargets } from "#/infrastructure/db/schema/schedule.sql";
 import { buildLikeContainsPattern } from "#/infrastructure/db/utils/sql";
 
 type ContentRow = {
@@ -22,6 +37,7 @@ type ContentRow = {
   ownerId: string;
   createdAt: Date | string;
   updatedAt: Date | string;
+  unusedSince: Date | string | null;
   fileKey: string | null;
   thumbnailKey: string | null;
   checksum: string | null;
@@ -80,6 +96,7 @@ const buildBaseContentQuery = () =>
       ownerId: content.ownerId,
       createdAt: content.createdAt,
       updatedAt: content.updatedAt,
+      unusedSince: content.unusedSince,
       fileKey: contentAssets.fileKey,
       thumbnailKey: contentAssets.thumbnailKey,
       checksum: contentAssets.checksum,
@@ -146,8 +163,19 @@ const mapContentRowToRecord = (row: ContentRow): ContentRecord => {
       row.updatedAt instanceof Date
         ? row.updatedAt.toISOString()
         : row.updatedAt,
+    unusedSince:
+      row.unusedSince == null
+        ? null
+        : row.unusedSince instanceof Date
+          ? row.unusedSince.toISOString()
+          : row.unusedSince,
   };
 };
+
+const contentReferenceExists = (contentIdColumn = content.id) =>
+  sql`exists (select 1 from ${playlistItems} where ${playlistItems.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${scheduleContentTargets} where ${scheduleContentTargets.contentId} = ${contentIdColumn})
+    or exists (select 1 from ${emergencySlots} where ${emergencySlots.contentId} = ${contentIdColumn})`;
 
 export class ContentDbRepository implements ContentRepository {
   async findById(id: string): Promise<ContentRecord | null> {
@@ -310,6 +338,7 @@ export class ContentDbRepository implements ContentRepository {
         ownerId: input.ownerId,
         createdAt: now,
         updatedAt: now,
+        unusedSince: now,
       });
 
       await tx.insert(contentAssets).values({
@@ -404,6 +433,7 @@ export class ContentDbRepository implements ContentRepository {
           type: next.type,
           status: next.status,
           updatedAt: now,
+          unusedSince: sql`case when not (${contentReferenceExists()}) then ${now} else null end`,
         })
         .where(
           ownerId
@@ -511,5 +541,60 @@ export class ContentDbRepository implements ContentRepository {
           : eq(content.id, id),
       );
     return (result[0]?.affectedRows ?? 0) > 0;
+  }
+
+  async markUsed(ids: readonly string[], at: Date): Promise<void> {
+    const uniqueIds = Array.from(new Set(ids));
+    if (uniqueIds.length === 0) return;
+    await db
+      .update(content)
+      .set({ unusedSince: null, updatedAt: at })
+      .where(inArray(content.id, uniqueIds));
+  }
+
+  async refreshUnusedSince(ids: readonly string[], at: Date): Promise<void> {
+    const uniqueIds = Array.from(new Set(ids));
+    if (uniqueIds.length === 0) return;
+
+    await db
+      .update(content)
+      .set({ unusedSince: null })
+      .where(and(inArray(content.id, uniqueIds), contentReferenceExists()));
+
+    await db
+      .update(content)
+      .set({ unusedSince: at })
+      .where(
+        and(
+          inArray(content.id, uniqueIds),
+          isNull(content.unusedSince),
+          sql`not (${contentReferenceExists()})`,
+        ),
+      );
+  }
+
+  async deleteUnusedBefore(cutoff: Date): Promise<DeletedContentRecord[]> {
+    const candidates = await buildBaseContentQuery()
+      .where(
+        and(
+          isNotNull(content.unusedSince),
+          lte(content.unusedSince, cutoff),
+          sql`not (${contentReferenceExists()})`,
+        ),
+      )
+      .limit(500);
+    if (candidates.length === 0) return [];
+
+    const records = candidates.map(mapContentRowToRecord);
+    const ids = records.map((record) => record.id);
+    const result = await db.delete(content).where(inArray(content.id, ids));
+    const deletedCount = Number(result[0]?.affectedRows ?? 0);
+    if (deletedCount === 0) return [];
+
+    return records.map((record) => ({
+      id: record.id,
+      fileKey: record.fileKey,
+      thumbnailKey: record.thumbnailKey,
+    }));
   }
 }

@@ -235,6 +235,8 @@ const startMaintenanceWorker = (): void => {
   stopMaintenanceCleanupWorker = startMaintenanceCleanupWorker({
     maintenanceSettingsRepository:
       container.repositories.maintenanceSettingsRepository,
+    contentRepository: container.repositories.contentRepository,
+    contentStorage: container.storage.contentStorage,
     playlistRepository: container.repositories.playlistRepository,
     scheduleRepository: container.repositories.scheduleRepository,
     auditLogRepository: container.repositories.auditLogRepository,

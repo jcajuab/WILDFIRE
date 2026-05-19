@@ -11,6 +11,7 @@ export interface PlaylistRecord {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  unusedSince?: string | null;
 }
 
 export interface PlaylistItemRecord {
@@ -87,6 +88,10 @@ export interface PlaylistRepository {
   updateStatus(id: string, status: PlaylistStatus): Promise<void>;
   delete(id: string): Promise<boolean>;
   deleteForOwner(id: string, ownerId: string): Promise<boolean>;
+  deleteUnusedBefore?(input: {
+    cutoff: Date;
+    current: { date: string; time: string };
+  }): Promise<{ deleted: number; contentIds: string[] }>;
   listItems(playlistId: string): Promise<PlaylistItemRecord[]>;
   listItemsByPlaylistIds?(playlistIds: string[]): Promise<PlaylistItemRecord[]>;
   listItemStatsByPlaylistIds?(

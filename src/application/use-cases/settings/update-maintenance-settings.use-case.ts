@@ -19,6 +19,14 @@ export class UpdateMaintenanceSettingsUseCase {
   ) {}
 
   async execute(input: {
+    autoDeleteUnusedContent: {
+      enabled: boolean;
+      retentionDays: number;
+    };
+    autoDeleteUnusedPlaylists: {
+      enabled: boolean;
+      retentionDays: number;
+    };
     autoDeleteFinishedSchedules: {
       enabled: boolean;
       retentionDays: number;
@@ -29,6 +37,14 @@ export class UpdateMaintenanceSettingsUseCase {
     };
   }): Promise<MaintenanceSettingsView> {
     assertRetentionDays(
+      input.autoDeleteUnusedContent.retentionDays,
+      "Unused content",
+    );
+    assertRetentionDays(
+      input.autoDeleteUnusedPlaylists.retentionDays,
+      "Unused playlists",
+    );
+    assertRetentionDays(
       input.autoDeleteFinishedSchedules.retentionDays,
       "Finished schedules",
     );
@@ -36,6 +52,12 @@ export class UpdateMaintenanceSettingsUseCase {
 
     return toMaintenanceSettingsView(
       await this.deps.maintenanceSettingsRepository.update({
+        autoDeleteUnusedContentEnabled: true,
+        autoDeleteUnusedContentRetentionDays:
+          input.autoDeleteUnusedContent.retentionDays,
+        autoDeleteUnusedPlaylistsEnabled: true,
+        autoDeleteUnusedPlaylistsRetentionDays:
+          input.autoDeleteUnusedPlaylists.retentionDays,
         autoDeleteFinishedSchedulesEnabled: true,
         autoDeleteFinishedSchedulesRetentionDays:
           input.autoDeleteFinishedSchedules.retentionDays,

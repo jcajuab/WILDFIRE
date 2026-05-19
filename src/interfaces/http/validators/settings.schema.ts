@@ -2,6 +2,14 @@ import { z } from "zod";
 import { apiResponseSchema } from "#/interfaces/http/responses";
 
 export const maintenanceSettingsSchema = z.object({
+  autoDeleteUnusedContent: z.object({
+    enabled: z.boolean(),
+    retentionDays: z.number().int().min(1).max(3650),
+  }),
+  autoDeleteUnusedPlaylists: z.object({
+    enabled: z.boolean(),
+    retentionDays: z.number().int().min(1).max(3650),
+  }),
   autoDeleteFinishedSchedules: z.object({
     enabled: z.boolean(),
     retentionDays: z.number().int().min(1).max(3650),

@@ -22,6 +22,7 @@ export const playlists = mysqlTable(
     showCounter: boolean("show_counter").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    unusedSince: timestamp("unused_since"),
   },
   (table) => ({
     statusIdx: index("playlists_status_idx").on(table.status),
@@ -32,5 +33,6 @@ export const playlists = mysqlTable(
       table.status,
       table.updatedAt,
     ),
+    unusedSinceIdx: index("playlists_unused_since_idx").on(table.unusedSince),
   }),
 );
