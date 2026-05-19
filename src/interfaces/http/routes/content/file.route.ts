@@ -8,7 +8,6 @@ import {
   applicationErrorMappers,
   withRouteErrorHandling,
 } from "#/interfaces/http/routes/shared/error-handling";
-import { getOwnerScope } from "#/interfaces/http/routes/shared/ownership";
 import {
   contentIdParamSchema,
   downloadUrlResponseSchema,
@@ -73,7 +72,6 @@ export const registerContentFileRoutes = (args: {
         c.set("fileId", params.id);
         const result = await useCases.getDownloadUrl.execute({
           id: params.id,
-          ownerId: getOwnerScope(c),
         });
         return c.json({ data: result });
       },

@@ -796,6 +796,35 @@ describe("Content routes", () => {
     expect(body.data.downloadUrl).toContain("response-content-disposition=");
   });
 
+  test("GET /content/:id/file lets read-only users download another user's content", async () => {
+    const { app, issueToken, records } = await makeApp(["content:read"]);
+    const token = await issueToken();
+    const otherId = "22222222-2222-4222-8222-222222222222";
+    records.push({
+      id: otherId,
+      title: "Other Poster",
+      type: "IMAGE",
+      status: "READY",
+      fileKey: `content/images/${otherId}.png`,
+      checksum: "other",
+      mimeType: "image/png",
+      fileSize: 10,
+      width: null,
+      height: null,
+      duration: null,
+      ownerId: "user-2",
+      createdAt: "2025-01-01T00:00:00.000Z",
+    });
+
+    const response = await app.request(`/content/${otherId}/file`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.status).toBe(200);
+    const body = await parseJson<{ data: { downloadUrl: string } }>(response);
+    expect(body.data.downloadUrl).toContain(`content/images/${otherId}.png`);
+  });
+
   test("GET /content/:id/file returns 403 without content:read", async () => {
     const { app, issueToken, records } = await makeApp(["content:update"]);
     const token = await issueToken();

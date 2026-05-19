@@ -155,6 +155,10 @@ export class CreateScheduleUseCase {
       reason: "schedule_created",
     });
 
-    return toScheduleView(schedule, playlist, content, display);
+    const createdByUser = this.deps.userRepository
+      ? await this.deps.userRepository.findById(schedule.createdBy ?? "")
+      : null;
+
+    return toScheduleView(schedule, playlist, content, display, createdByUser);
   }
 }

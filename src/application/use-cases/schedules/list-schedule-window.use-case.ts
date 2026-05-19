@@ -1,6 +1,7 @@
 import { type ContentRepository } from "#/application/ports/content";
 import { type DisplayRepository } from "#/application/ports/displays";
 import { type PlaylistRepository } from "#/application/ports/playlists";
+import { type UserRepository } from "#/application/ports/rbac";
 import { type ScheduleRepository } from "#/application/ports/schedules";
 import { toScheduleView } from "./schedule-view";
 import {
@@ -17,6 +18,7 @@ export class ListScheduleWindowUseCase {
       playlistRepository: PlaylistRepository;
       contentRepository: ContentRepository;
       displayRepository: DisplayRepository;
+      userRepository?: UserRepository;
     },
   ) {}
 
@@ -70,6 +72,7 @@ export class ListScheduleWindowUseCase {
       playlistRepository: this.deps.playlistRepository,
       contentRepository: this.deps.contentRepository,
       displayRepository: this.deps.displayRepository,
+      userRepository: this.deps.userRepository,
       ownerId: input.ownerId,
     });
 
@@ -85,6 +88,9 @@ export class ListScheduleWindowUseCase {
             ? (maps.contentMap.get(schedule.contentId) ?? null)
             : null,
           maps.displayMap.get(schedule.displayId) ?? null,
+          schedule.createdBy
+            ? (maps.userMap.get(schedule.createdBy) ?? null)
+            : null,
         ),
       );
   }

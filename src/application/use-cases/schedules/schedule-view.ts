@@ -1,6 +1,7 @@
 import { type ContentRecord } from "#/application/ports/content";
 import { type DisplayRecord } from "#/application/ports/displays";
 import { type PlaylistRecord } from "#/application/ports/playlists";
+import { type UserRecord } from "#/application/ports/rbac";
 import { type ScheduleRecord } from "#/application/ports/schedules";
 
 export const toScheduleView = (
@@ -8,6 +9,7 @@ export const toScheduleView = (
   playlist: PlaylistRecord | null,
   content: ContentRecord | null,
   display: DisplayRecord | null,
+  createdByUser: UserRecord | null = null,
 ) => ({
   id: schedule.id,
   name: schedule.name,
@@ -22,6 +24,13 @@ export const toScheduleView = (
   endTime: schedule.endTime,
   createdAt: schedule.createdAt,
   updatedAt: schedule.updatedAt,
+  createdByUser: createdByUser
+    ? {
+        id: createdByUser.id,
+        username: createdByUser.username,
+        name: createdByUser.name,
+      }
+    : null,
   playlist: playlist ? { id: playlist.id, name: playlist.name } : null,
   content: content
     ? {

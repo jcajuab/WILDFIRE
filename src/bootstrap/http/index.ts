@@ -455,6 +455,7 @@ const schedulesModule = createSchedulesHttpModule({
     displayRepository: container.repositories.displayRepository,
     displayGroupRepository: container.repositories.displayGroupRepository,
     contentRepository: container.repositories.contentRepository,
+    userRepository: container.repositories.userRepository,
     authorizationRepository: container.repositories.authorizationRepository,
   },
   displayEventPublisher,

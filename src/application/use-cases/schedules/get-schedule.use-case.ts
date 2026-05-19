@@ -1,6 +1,7 @@
 import { type ContentRepository } from "#/application/ports/content";
 import { type DisplayRepository } from "#/application/ports/displays";
 import { type PlaylistRepository } from "#/application/ports/playlists";
+import { type UserRepository } from "#/application/ports/rbac";
 import { type ScheduleRepository } from "#/application/ports/schedules";
 import { NotFoundError } from "./errors";
 import { toScheduleView } from "./schedule-view";
@@ -13,6 +14,7 @@ export class GetScheduleUseCase {
       playlistRepository: PlaylistRepository;
       contentRepository: ContentRepository;
       displayRepository: DisplayRepository;
+      userRepository?: UserRepository;
     },
   ) {}
 
@@ -26,7 +28,7 @@ export class GetScheduleUseCase {
       contentRepository: this.deps.contentRepository,
     });
 
-    const [playlist, content, display] = await Promise.all([
+    const [playlist, content, display, createdByUser] = await Promise.all([
       schedule.playlistId
         ? input.ownerId && this.deps.playlistRepository.findByIdForOwner
           ? this.deps.playlistRepository.findByIdForOwner(
@@ -44,6 +46,9 @@ export class GetScheduleUseCase {
           : this.deps.contentRepository.findById(schedule.contentId)
         : Promise.resolve(null),
       this.deps.displayRepository.findById(schedule.displayId),
+      schedule.createdBy && this.deps.userRepository
+        ? this.deps.userRepository.findById(schedule.createdBy)
+        : Promise.resolve(null),
     ]);
 
     if (
@@ -53,6 +58,6 @@ export class GetScheduleUseCase {
       throw new NotFoundError("Schedule not found");
     }
 
-    return toScheduleView(schedule, playlist, content, display);
+    return toScheduleView(schedule, playlist, content, display, createdByUser);
   }
 }

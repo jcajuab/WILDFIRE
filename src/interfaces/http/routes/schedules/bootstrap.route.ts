@@ -45,7 +45,7 @@ export const registerScheduleBootstrapRoutes = (args: {
         return jsonWithServerCache(
           c,
           {
-            domains: ["schedules", "displays", "playlists", "content"],
+            domains: ["schedules", "displays", "playlists", "content", "users"],
             ttl: "dynamic",
             varyByOwner: true,
           },

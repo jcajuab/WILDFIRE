@@ -260,18 +260,15 @@ export const registerPlaylistCrudRoutes = (args: {
       async (c) => {
         const params = c.req.valid("param");
         c.set("resourceId", params.id);
-        const ownerId = getOwnerScope(c);
         return jsonWithServerCache(
           c,
           {
             domains: ["playlists", "content"],
             ttl: "default",
-            varyByOwner: true,
           },
           async () => {
             const result = await useCases.getPlaylist.execute({
               id: params.id,
-              ownerId,
             });
             return { data: result };
           },

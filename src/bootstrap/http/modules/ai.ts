@@ -149,6 +149,7 @@ export const createAIModule = (config: AIHttpModuleConfig): AIHttpModule => {
     playlistRepository: config.repositories.playlistRepository,
     displayRepository: config.repositories.displayRepository,
     contentRepository: config.repositories.contentRepository,
+    userRepository: config.repositories.userRepository,
   });
 
   const listDisplaysUseCase = new ListDisplaysUseCase({
@@ -173,6 +174,7 @@ export const createAIModule = (config: AIHttpModuleConfig): AIHttpModule => {
     playlistRepository: config.repositories.playlistRepository,
     contentRepository: config.repositories.contentRepository,
     displayRepository: config.repositories.displayRepository,
+    userRepository: config.repositories.userRepository,
   });
 
   const updateContentUseCase = new UpdateContentUseCase({
@@ -205,6 +207,7 @@ export const createAIModule = (config: AIHttpModuleConfig): AIHttpModule => {
     playlistRepository: config.repositories.playlistRepository,
     contentRepository: config.repositories.contentRepository,
     displayRepository: config.repositories.displayRepository,
+    userRepository: config.repositories.userRepository,
   });
 
   const deleteScheduleUseCase = new DeleteScheduleUseCase({

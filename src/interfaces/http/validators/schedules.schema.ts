@@ -18,6 +18,13 @@ export const scheduleSchema = z.object({
   createdBy: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  createdByUser: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+      name: z.string().nullable(),
+    })
+    .nullable(),
   playlist: z
     .object({
       id: z.string(),

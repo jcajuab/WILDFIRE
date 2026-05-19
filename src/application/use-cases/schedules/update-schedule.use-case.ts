@@ -199,6 +199,11 @@ export class UpdateScheduleUseCase {
       reason: "schedule_updated",
     });
 
-    return toScheduleView(schedule, playlist, content, display);
+    const createdByUser =
+      schedule.createdBy && this.deps.userRepository
+        ? await this.deps.userRepository.findById(schedule.createdBy)
+        : null;
+
+    return toScheduleView(schedule, playlist, content, display, createdByUser);
   }
 }

@@ -1119,8 +1119,10 @@ describe("Playlists routes", () => {
     expect(response.status).toBe(500);
   });
 
-  test("GET /playlists/:id returns 404 when normal user requests another user's playlist", async () => {
-    const { app, issueToken, playlists } = await makeApp(["playlists:read"]);
+  test("GET /playlists/:id lets read-only users view another user's playlist", async () => {
+    const { app, issueToken, playlists, items, contents } = await makeApp([
+      "playlists:read",
+    ]);
     playlists.push({
       id: playlistId,
       name: "Other User Playlist",
@@ -1130,13 +1132,58 @@ describe("Playlists routes", () => {
       createdAt: "2025-01-01T00:00:00.000Z",
       updatedAt: "2025-01-01T00:00:00.000Z",
     });
+    const otherContentId = "11111111-2222-4333-8444-555555555555";
+    contents.push({
+      id: otherContentId,
+      title: "Other User Poster",
+      type: "IMAGE",
+      status: "READY",
+      fileKey: "content/images/other-user-poster.png",
+      checksum: "other",
+      mimeType: "image/png",
+      fileSize: 10,
+      width: 10,
+      height: 10,
+      duration: null,
+      thumbnailKey: "content/thumbs/other-user-poster.png",
+      ownerId: "user-2",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+    });
+    items.push({
+      id: "item-other-1",
+      playlistId,
+      contentId: otherContentId,
+      sequence: 1,
+      duration: 10,
+      loop: false,
+    });
 
     const token = await issueToken();
     const response = await app.request(`/playlists/${playlistId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(200);
+    const body = await parseJson<{
+      data: {
+        name: string;
+        owner: { id: string };
+        items: Array<{
+          content: { id: string; title: string; thumbnailUrl: string | null };
+        }>;
+      };
+    }>(response);
+    expect(body.data.name).toBe("Other User Playlist");
+    expect(body.data.owner.id).toBe("user-2");
+    expect(body.data.items[0]?.content).toEqual(
+      expect.objectContaining({
+        id: otherContentId,
+        title: "Other User Poster",
+        thumbnailUrl:
+          "https://cdn.example.com/content/thumbs/other-user-poster.png",
+      }),
+    );
   });
 
   test("PATCH /playlists/:id returns 404 when normal user edits another user's playlist", async () => {

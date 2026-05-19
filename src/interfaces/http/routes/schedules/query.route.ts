@@ -63,7 +63,7 @@ export const registerScheduleQueryRoutes = (args: {
         return jsonWithServerCache(
           c,
           {
-            domains: ["schedules", "playlists", "content"],
+            domains: ["schedules", "playlists", "content", "users"],
             ttl: "dynamic",
           },
           async () => {

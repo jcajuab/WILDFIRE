@@ -13,7 +13,10 @@ import {
   type DisplayRepository,
 } from "#/application/ports/displays";
 import { type PlaylistRepository } from "#/application/ports/playlists";
-import { type AuthorizationRepository } from "#/application/ports/rbac";
+import {
+  type AuthorizationRepository,
+  type UserRepository,
+} from "#/application/ports/rbac";
 import { type ScheduleRepository } from "#/application/ports/schedules";
 import { type ListContentOptionsUseCase } from "#/application/use-cases/content";
 import {
@@ -45,6 +48,7 @@ export interface SchedulesRouterDeps {
     displayRepository: DisplayRepository;
     displayGroupRepository?: DisplayGroupRepository;
     contentRepository: ContentRepository;
+    userRepository: UserRepository;
     authorizationRepository: AuthorizationRepository;
   };
   contentStorage: ContentStorage;

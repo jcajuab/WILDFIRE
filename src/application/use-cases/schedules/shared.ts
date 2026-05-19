@@ -2,6 +2,7 @@ import { ValidationError } from "#/application/errors/validation";
 import { type ContentRepository } from "#/application/ports/content";
 import { type DisplayRepository } from "#/application/ports/displays";
 import { type PlaylistRepository } from "#/application/ports/playlists";
+import { type UserRepository } from "#/application/ports/rbac";
 import {
   type ScheduleKind,
   type ScheduleRecord,
@@ -20,6 +21,7 @@ export type ScheduleMutationDeps = {
   playlistRepository: PlaylistRepository;
   displayRepository: DisplayRepository;
   contentRepository: ContentRepository;
+  userRepository?: UserRepository;
   timezone?: string;
 };
 
@@ -294,6 +296,7 @@ export const buildScheduleViewMaps = async (input: {
   playlistRepository: PlaylistRepository;
   contentRepository: ContentRepository;
   displayRepository: DisplayRepository;
+  userRepository?: UserRepository;
   ownerId?: string;
 }) => {
   const playlistIds = Array.from(
@@ -313,8 +316,15 @@ export const buildScheduleViewMaps = async (input: {
   const displayIds = Array.from(
     new Set(input.schedules.map((schedule) => schedule.displayId)),
   );
+  const createdByIds = Array.from(
+    new Set(
+      input.schedules
+        .map((schedule) => schedule.createdBy)
+        .filter((value): value is string => value !== null),
+    ),
+  );
 
-  const [playlists, contents, displays] = await Promise.all([
+  const [playlists, contents, displays, users] = await Promise.all([
     input.ownerId
       ? input.playlistRepository.findByIdsForOwner(playlistIds, input.ownerId)
       : input.playlistRepository.findByIds(playlistIds),
@@ -322,12 +332,14 @@ export const buildScheduleViewMaps = async (input: {
       ? input.contentRepository.findByIdsForOwner(contentIds, input.ownerId)
       : input.contentRepository.findByIds(contentIds),
     input.displayRepository.findByIds(displayIds),
+    input.userRepository ? input.userRepository.findByIds(createdByIds) : [],
   ]);
 
   return {
     playlistMap: new Map(playlists.map((item) => [item.id, item])),
     contentMap: new Map(contents.map((item) => [item.id, item])),
     displayMap: new Map(displays.map((item) => [item.id, item])),
+    userMap: new Map(users.map((item) => [item.id, item])),
   };
 };
 

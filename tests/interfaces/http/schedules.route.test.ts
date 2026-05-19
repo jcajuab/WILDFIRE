@@ -257,6 +257,31 @@ const makeApp = async (
             permissions.map((permission) => Permission.parse(permission)),
           isAdminUser: async () => false,
         },
+        userRepository: {
+          list: async () => [],
+          findById: async (id: string) => ({
+            id,
+            username: id === "user-2" ? "sender" : "user",
+            email: null,
+            name: id === "user-2" ? "Schedule Sender" : "Test User",
+            isActive: true,
+          }),
+          findByIds: async (ids: string[]) =>
+            ids.map((id) => ({
+              id,
+              username: id === "user-2" ? "sender" : "user",
+              email: null,
+              name: id === "user-2" ? "Schedule Sender" : "Test User",
+              isActive: true,
+            })),
+          findByUsername: async () => null,
+          findByEmail: async () => null,
+          create: async () => {
+            throw new Error("not used");
+          },
+          update: async () => null,
+          delete: async () => false,
+        },
         contentRepository: {
           create: async () => {
             throw new Error("not used");
@@ -361,10 +386,20 @@ describe("Schedules routes", () => {
     });
 
     expect(response.status).toBe(200);
-    const body = await parseJson<{ data: Array<{ name: string }> }>(response);
+    const body = await parseJson<{
+      data: Array<{
+        name: string;
+        createdByUser: { id: string; username: string; name: string | null };
+      }>;
+    }>(response);
     expect(body.data.map((schedule) => schedule.name)).toEqual([
       "Shared Morning",
     ]);
+    expect(body.data[0]?.createdByUser).toEqual({
+      id: "user-2",
+      username: "sender",
+      name: "Schedule Sender",
+    });
   });
 
   test("GET /schedules/:id hydrates shared playlist targets from other creators", async () => {
@@ -399,10 +434,12 @@ describe("Schedules routes", () => {
     const body = await parseJson<{
       data: {
         createdBy: string | null;
+        createdByUser: { id: string; username: string; name: string | null };
         playlist: { id: string; name: string } | null;
       };
     }>(response);
     expect(body.data.createdBy).toBe("user-2");
+    expect(body.data.createdByUser.name).toBe("Schedule Sender");
     expect(body.data.playlist).toEqual({ id: playlistId, name: "Morning" });
   });
 
@@ -437,8 +474,14 @@ describe("Schedules routes", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await parseJson<{ data: Array<{ name: string }> }>(response);
+    const body = await parseJson<{
+      data: Array<{
+        name: string;
+        createdByUser: { id: string; username: string; name: string | null };
+      }>;
+    }>(response);
     expect(body.data.map((schedule) => schedule.name)).toEqual(["Morning"]);
+    expect(body.data[0]?.createdByUser.name).toBe("Schedule Sender");
   });
 
   test("GET /schedules/bootstrap includes schedules from other creators but owner-scopes create options", async () => {
@@ -474,13 +517,17 @@ describe("Schedules routes", () => {
     expect(response.status).toBe(200);
     const body = await parseJson<{
       data: {
-        schedules: Array<{ name: string }>;
+        schedules: Array<{
+          name: string;
+          createdByUser: { id: string; username: string; name: string | null };
+        }>;
         playlistOptions: Array<{ id: string }>;
       };
     }>(response);
     expect(body.data.schedules.map((schedule) => schedule.name)).toEqual([
       "Shared Morning",
     ]);
+    expect(body.data.schedules[0]?.createdByUser.name).toBe("Schedule Sender");
     expect(body.data.playlistOptions).toEqual([]);
   });
 
