@@ -144,6 +144,7 @@ describe("backend architecture boundaries", () => {
         "src/infrastructure/db/repositories/display.repo.ts",
         "src/infrastructure/db/repositories/emergency-slot.repo.ts",
         "src/infrastructure/db/repositories/invitation.repo.ts",
+        "src/infrastructure/db/repositories/maintenance-settings.repo.ts",
         "src/infrastructure/db/repositories/password-hashes.repo.ts",
         "src/infrastructure/db/repositories/permission.repo.ts",
         "src/infrastructure/db/repositories/playlist.repo.ts",

@@ -22,6 +22,7 @@ export class CreatePlaylistUseCase {
     description?: string | null;
     showCounter?: boolean;
     ownerId: string;
+    contentOwnerScopeId?: string;
     items: readonly {
       contentId: string;
       duration: number;
@@ -48,7 +49,7 @@ export class CreatePlaylistUseCase {
       });
 
       const items = await this.deps.replacePlaylistItemsAtomicUseCase.execute({
-        ownerId: input.ownerId,
+        ownerId: input.contentOwnerScopeId,
         playlistId: playlist.id,
         items: input.items.map((item) => ({
           kind: "new" as const,

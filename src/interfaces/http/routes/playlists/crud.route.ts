@@ -215,6 +215,7 @@ export const registerPlaylistCrudRoutes = (args: {
           description: payload.description ?? null,
           showCounter: payload.showCounter,
           ownerId: c.get("userId"),
+          contentOwnerScopeId: getOwnerScope(c),
           items: payload.items,
         });
         c.set("resourceId", result.id);

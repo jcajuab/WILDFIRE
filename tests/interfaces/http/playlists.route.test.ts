@@ -873,6 +873,70 @@ describe("Playlists routes", () => {
     ]);
   });
 
+  test("POST /playlists allows admins to create playlists from any visible content", async () => {
+    const { app, issueToken, items, contents } = await makeApp([
+      "playlists:create",
+    ]);
+    const token = await issueToken({ isAdmin: true });
+    const otherUserContent = contents.find(
+      (content) => content.id === contentId2,
+    );
+    if (!otherUserContent) throw new Error("test content not found");
+    otherUserContent.ownerId = "user-2";
+
+    const response = await app.request("/playlists", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Admin playlist",
+        items: [{ contentId: contentId2, duration: 5 }],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const json = await parseJson<{
+      data: { id: string; owner: { id: string } };
+    }>(response);
+    expect(json.data.owner.id).toBe("user-1");
+    expect(items).toEqual([
+      expect.objectContaining({
+        playlistId: json.data.id,
+        contentId: contentId2,
+        duration: 5,
+      }),
+    ]);
+  });
+
+  test("POST /playlists keeps non-admin users scoped to their own content", async () => {
+    const { app, issueToken, items, contents } = await makeApp([
+      "playlists:create",
+    ]);
+    const token = await issueToken();
+    const otherUserContent = contents.find(
+      (content) => content.id === contentId2,
+    );
+    if (!otherUserContent) throw new Error("test content not found");
+    otherUserContent.ownerId = "user-2";
+
+    const response = await app.request("/playlists", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "User playlist",
+        items: [{ contentId: contentId2, duration: 5 }],
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(items).toEqual([]);
+  });
+
   test("POST /playlists rejects missing playlist items", async () => {
     const { app, issueToken } = await makeApp(["playlists:create"]);
     const token = await issueToken();
